@@ -37,7 +37,9 @@ end
 
 
 begin
-
+  p m.account_status[:total]
+  p m.accounts
+  p m.recent
 ensure
   # logout
   m.logout

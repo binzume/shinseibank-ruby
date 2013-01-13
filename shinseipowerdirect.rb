@@ -68,12 +68,37 @@ class ShinseiPowerDirect
       'fldRegAuthFlag'=>values['fldRegAuthFlag'],
     }
 
+    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
+    res = @client.post(url, postdata)
+
+    get_accounts
+  end
+
+
+  def logout
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'RT',
+      'fldTxnID'=>'CDC',
+      'fldScrSeqNo'=>'49',
+      'fldRequestorID'=>'',
+      'fldSessionID'=> @ssid,
+
+      'fldIncludeBal'=>'Y',
+      'fldCurDef'=>'JPY'
+    }
+
     #p postdata
     url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     res = @client.post(url, postdata)
 
-    #puts res.body
+  end
 
+  def recent
+    get_history nil, nil, @accounts.keys[0]
+  end
+
+  def get_accounts
 
     postdata = {
       'MfcISAPICommand'=>'EntryFunc',
@@ -108,46 +133,85 @@ class ShinseiPowerDirect
     }
 
     res.body.scan(/fldCurrBalance\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
-        accounts[accountid[m[1].to_i]][:balance] = m[2]
+        accounts[accountid[m[1].to_i]][:balance] = m[2].gsub(/,/,'').to_f
     }
 
     res.body.scan(/fldCLACurrBalance\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
-        accounts[accountid[m[1].to_i]][:cla_balance] = m[2]
+        accounts[accountid[m[1].to_i]][:cla_balance] = m[2].gsub(/,/,'').to_f
     }
 
     total = "0"
     if res.body =~/fldGrandTotalCR="([\d\.,]+)"/
-      total = $1
+      total = $1.gsub(/,/,'').to_i
     end
 
     @accounts = accounts
     @account_status = {:total=>total}
+
   end
 
+  def get_history from,to,id
 
-  def logout
     postdata = {
       'MfcISAPICommand'=>'EntryFunc',
       'fldAppID'=>'RT',
-      'fldTxnID'=>'CDC',
-      'fldScrSeqNo'=>'49',
-      'fldRequestorID'=>'',
+      'fldTxnID'=>'ACA',
+      'fldScrSeqNo'=>'01',
+      'fldRequestorID'=>'9',
       'fldSessionID'=> @ssid,
 
-      'fldIncludeBal'=>'Y',
-      'fldCurDef'=>'JPY'
+      'fldAcctID'=> id, # 400????
+      'fldAcctType'=>'CHECKING',
+      'fldIncludeBal'=>'N',
+
+      'fldStartDate'=> from ? from.strftime('%Y%m%d') : '',
+      'fldEndDate'=> to ? to.strftime('%Y%m%d') : '',
+      'fldStartNum'=>'0',
+      'fldEndNum'=>'0',
+      'fldCurDef'=>'JPY',
+      'fldPeriod'=>'1'
     }
 
     #p postdata
     url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     res = @client.post(url, postdata)
 
+    history = []
 
+    res.body.scan(/fldDate\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i] = {:date=>m[2]}
+    }
+
+    res.body.scan(/fldDesc\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:description] = m[2]
+    }
+
+    res.body.scan(/fldRefNo\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:ref_no] = m[2]
+    }
+
+    res.body.scan(/fldDRCRFlag\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:drcr] = m[2]
+    }
+
+    res.body.scan(/fldAmount\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:amount] = m[2].gsub(/[,\.]/,'').to_i
+        if history[m[1].to_i][:drcr] == 'D'
+          history[m[1].to_i][:out] = m[2].gsub(/[,\.]/,'').to_i
+        else
+          history[m[1].to_i][:in] = m[2].gsub(/[,\.]/,'').to_i
+        end
+    }
+
+    res.body.scan(/fldRunningBalanceRaw\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:balance] = m[2].gsub(/,/,'').to_i
+    }
+
+    @account_status = {:total=>history[0][:amount], :id=>id}
+    history.slice(1)
   end
 
-  def get_history from,to
-  end
-
+  private
   def getgrid account, cell
     x = cell[0].tr('A-J', '0-9').to_i
     y = cell[1].to_i

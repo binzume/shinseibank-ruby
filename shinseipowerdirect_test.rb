@@ -1,23 +1,33 @@
 #!/usr/bin/ruby -Ku
+
+require 'test/unit'
 require 'yaml'
-require_relative "shinseipowerdirect"
+require_relative 'shinseipowerdirect'
 
-account = YAML.load_file('shinsei_account.yaml')
+class ShinseiPowerDirectTest < Test::Unit::TestCase
+  def setup
+    @account = YAML.load_file('shinsei_account.yaml')
+    @m = ShinseiPowerDirect.new
+  end
 
-# login
-m = ShinseiPowerDirect.new
-unless m.login(account)
-  puts "LOGIN ERROR"
+  def test_login
+
+    unless @m.login(@account)
+      puts "LOGIN ERROR"
+    end
+
+    begin
+      assert(@m.account_status != nil)
+      assert(@m.accounts.length > 0)
+      p @m.account_status[:total]
+      p @m.accounts
+      p @m.recent
+    ensure
+      # logout
+      @m.logout
+    end
+  end
+
 end
-
-begin
-  p m.account_status[:total]
-  p m.accounts
-ensure
-  # logout
-  m.logout
-end
-
-puts "ok"
 
 
