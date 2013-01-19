@@ -22,29 +22,35 @@ GRID:
 口座番号，パスワード，暗証番号とセキュリティーカードの情報を書いてください．
 
 
-# mizuhodirect_sample.rb
+# shinseipowerdirect_sample.rb
 #!/usr/bin/ruby -Ku
-require 'yaml'
-require_relative "shinseipowerdirect"
+# -*- encoding: utf-8 -*-
 
-account = YAML.load_file('shinsei_account.yaml')
+require 'yaml'
+require_relative 'shinseipowerdirect'
+
+shinsei_account = YAML.load_file('shinsei_account.yaml')
+powerdirect = ShinseiPowerDirect.new
 
 # login
-m = ShinseiPowerDirect.new
-unless m.login(account)
-  puts "LOGIN ERROR"
+unless powerdirect.login(shinsei_account)
+  puts 'LOGIN ERROR'
+  exit
 end
 
-
 begin
-  p m.account_status[:total]
-  p m.accounts
-  p m.recent
+  puts 'total: ' + powerdirect.total_balance.to_s
+  powerdirect.recent.each do |row|
+    p row
+  end
+
+  p powerdirect.accounts
 ensure
   # logout
-  m.logout
+  powerdirect.logout
 end
 
 puts "ok"
+
 
 
