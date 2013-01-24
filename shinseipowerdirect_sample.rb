@@ -1,5 +1,6 @@
 #!/usr/bin/ruby -Ku
 # -*- encoding: utf-8 -*-
+#
 
 require 'yaml'
 require_relative 'shinseipowerdirect'
@@ -20,6 +21,10 @@ begin
   end
 
   p powerdirect.accounts
+
+  # 登録済み口座に振り込み 200万円まで？？
+  # powerdirect.transfer_to_registered_account('登録済み振込先の口座番号7桁(仮)', 50000)
+
 ensure
   # logout
   powerdirect.logout

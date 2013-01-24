@@ -42,10 +42,8 @@ class ShinseiPowerDirect
     url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     res = @client.post(url, postdata)
 
-    keys = ['fldSessionID', 'fldGridChallange1', 'fldGridChallange2', 'fldGridChallange3', 'fldRegAuthFlag']
     values= {}
-
-    keys.each{|k|
+    ['fldSessionID', 'fldGridChallange1', 'fldGridChallange2', 'fldGridChallange3', 'fldRegAuthFlag'].each{|k|
       if res.body =~/#{k}=['"](\w+)['"]/
         values[k] = $1
       end
@@ -131,13 +129,19 @@ class ShinseiPowerDirect
     url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     res = @client.post(url, postdata)
 
-    #puts res.body
-
     accountid=[]
     accounts = {}
     res.body.scan(/fldAccountID\[(\d+)\]="(\w+)"/) { m = Regexp.last_match
         accountid[m[1].to_i] = m[2]
         accounts[m[2]] = {:id=>m[2]}
+    }
+
+    res.body.scan(/fldAccountType\[(\d+)\]="(\w+)"/) { m = Regexp.last_match
+        accounts[accountid[m[1].to_i]][:type] = m[2]
+    }
+
+    res.body.scan(/fldAccountDesc\[(\d+)\]="(\w+)"/) { m = Regexp.last_match
+        accounts[accountid[m[1].to_i]][:desc] = m[2]
     }
 
     res.body.scan(/fldCurrCcy\[(\d+)\]="(\w+)"/) { m = Regexp.last_match
@@ -148,8 +152,8 @@ class ShinseiPowerDirect
         accounts[accountid[m[1].to_i]][:balance] = m[2].gsub(/,/,'').to_f
     }
 
-    res.body.scan(/fldCLACurrBalance\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
-        accounts[accountid[m[1].to_i]][:cla_balance] = m[2].gsub(/,/,'').to_f
+    res.body.scan(/fldBaseBalance\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        accounts[accountid[m[1].to_i]][:base_balance] = m[2].gsub(/,/,'').to_f
     }
 
     total = "0"
@@ -225,7 +229,8 @@ class ShinseiPowerDirect
 
   ##
   # move to registered account
-  # NOT IMPLEMENTED
+  #   name = target 7digit account num.
+  #   amount < 2000000 ?
   def transfer_to_registered_account name, amount
 
     postdata = {
@@ -240,12 +245,11 @@ class ShinseiPowerDirect
     #p postdata
     url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     res = @client.post(url, postdata)
-    puts res.body
 
     registered_account = []
 
-    res.body.scan(/fldListPayeeAcctId\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
-        registered_account[m[1].to_i] = {:account_id=>m[2]}
+    res.body.scan(/fldListPayeeAcctId\[(\d+)\]="([^"]+)"/).each{|m|
+        registered_account[m[0].to_i] = {:account_id=>m[1]}
     }
 
     res.body.scan(/fldListPayeeAcctType\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
@@ -253,18 +257,133 @@ class ShinseiPowerDirect
     }
 
     res.body.scan(/fldListPayeeName\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
-        registered_account[m[1].to_i] = {:name=>m[2]}
+        registered_account[m[1].to_i][:name] = m[2]
     }
 
     res.body.scan(/fldListPayeeBank\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
-        registered_account[m[1].to_i][:bank] = m[2].toutf8
+        registered_account[m[1].to_i][:bank] = m[2]
+    }
+
+    res.body.scan(/fldListPayeeBankKanji\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        registered_account[m[1].to_i][:bank_kanji] = m[2]
+    }
+
+    res.body.scan(/fldListPayeeBankKana\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        registered_account[m[1].to_i][:bank_kana] = m[2]
     }
 
     res.body.scan(/fldListPayeeBranch\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
         registered_account[m[1].to_i][:branch] = m[2]
     }
 
-    p registered_account
+    res.body.scan(/fldListPayeeBranchKanji\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        registered_account[m[1].to_i][:branch_kanji] = m[2]
+    }
+
+    res.body.scan(/fldListPayeeBranchKana\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        registered_account[m[1].to_i][:branch_kana] = m[2]
+    }
+
+    #p registered_account
+
+    values= {}
+    ['fldRemitterName', 'fldInvoice', 'fldInvoicePosition','fldDomFTLimit', 'fldRemReimburse'].each{|k|
+      if res.body =~/#{k}=['"]([^'"]*)['"]/
+        values[k] = $1
+      end
+    }
+
+    target_account = registered_account.find{|a| a[:account_id] == name  };
+    from_name = values['fldRemitterName']
+    account = @accounts.keys[0] # とりあえず普通円預金っぽいやつ
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'RT',
+      'fldTxnID'=>'ZNT',
+      'fldScrSeqNo'=>'07',
+      'fldRequestorID'=>'74',
+      'fldSessionID'=> @ssid,
+
+      'fldAcctId' => account,
+      'fldAcctType' => @accounts[account][:type] ,
+      'fldAcctDesc'=> @accounts[account][:desc],
+      'fldMemo'=> from_name,
+      #'fldRemitterName'=> '',
+      #'fldInvoice'=>'',
+      #'fldInvoicePosition'=>'B',
+      'fldTransferAmount' => amount,
+      'fldTransferType'=>'P', # P(registerd) or D
+      #'fldPayeeId'=>'',
+      'fldPayeeName' => target_account[:name],
+      'fldPayeeAcctId' => target_account[:account_id],
+      'fldPayeeAcctType' => target_account[:account_type],
+      #fldPayeeBankCode:undefined
+      'fldPayeeBankName' => target_account[:bank],
+      'fldPayeeBankNameKana' => target_account[:bank_kana],
+      'fldPayeeBankNameKanji' => target_account[:bank_kanji],
+      #fldPayeeBranchCode:undefined
+      'fldPayeeBranchName' => target_account[:branch],
+      'fldPayeeBranchNameKana' => target_account[:branch_kana],
+      'fldPayeeBranchNameKanji' => target_account[:branch_kanji],
+      #fldSearchBankName:
+      #fldSearchBranchName:
+      #fldFlagRegister:
+      #'fldDomFTLimit'=>'4000000',
+      #'fldRemReimburse'=>4,
+    }.merge(values)
+
+
+    res = @client.post(url, postdata)
+
+    values= {}
+    ['fldMemo', 'fldInvoicePosition', 'fldTransferType', 'fldTransferDate', 'fldTransferFeeUnformatted',
+      'fldDebitAmountUnformatted', 'fldReimbursedAmt', 'fldRemReimburse'].each{|k|
+      if res.body =~/#{k}=['"]([^'"]*)['"]/
+        values[k] = $1
+      end
+    }
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'RT',
+      'fldTxnID'=>'ZNT',
+      'fldScrSeqNo'=>'08',
+      'fldRequestorID'=>'76',
+      'fldSessionID'=> @ssid,
+
+      'fldAcctId' => @accounts.keys[0],
+      'fldAcctType' => @accounts[ @accounts.keys[0] ][:type] ,
+      'fldAcctDesc'=> @accounts[ @accounts.keys[0] ][:desc],
+      #'fldMemo'=> from_name,
+      'fldRemitterName'=> target_account[:name],
+      #'fldInvoice'=>'',
+      #'fldInvoicePosition'=>'B',
+      'fldTransferAmount' => amount,
+      'fldTransferType'=>'P', # P(registerd) or D
+      #'fldTransferDate' => transfar_date,
+      #'fldPayeeId'=>'',
+      'fldPayeeName' => target_account[:name],
+      'fldPayeeAcctId' => target_account[:account_id],
+      'fldPayeeAcctType' => target_account[:account_type],
+      #fldPayeeBankCode:undefined
+      'fldPayeeBankName' => target_account[:bank],
+      'fldPayeeBankNameKana' => target_account[:bank_kana],
+      'fldPayeeBankNameKanji' => target_account[:bank_kanji],
+      #fldPayeeBranchCode:undefined
+      'fldPayeeBranchName' => target_account[:branch],
+      'fldPayeeBranchNameKana' => target_account[:branch_kana],
+      'fldPayeeBranchNameKanji' => target_account[:branch_kanji],
+      #fldSearchBankName:
+      #fldSearchBranchName:
+      #fldFlagRegister:
+      #'fldDomFTLimit'=>'4000000',
+    }.merge(values)
+
+    p postdata
+    res = @client.post(url, postdata)
+    puts res.body
+
   end
 
   private
