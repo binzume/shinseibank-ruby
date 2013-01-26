@@ -20,7 +20,12 @@ begin
     p row
   end
 
-  p powerdirect.accounts
+  powerdirect.accounts.values.find_all{|a|a[:balance]>0}.each{|a|
+    p a
+  }
+  powerdirect.funds.each{|f|
+    p f
+  }
 
   # 登録済み口座に振り込み 200万円まで？？
   # powerdirect.transfer_to_registered_account('登録済み振込先の口座番号7桁(仮)', 50000)

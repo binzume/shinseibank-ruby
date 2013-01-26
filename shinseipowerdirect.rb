@@ -8,7 +8,7 @@ require "time"
 require_relative "httpclient"
 
 class ShinseiPowerDirect
-  attr_accessor :account, :account_status, :accounts
+  attr_accessor :account, :account_status, :accounts, :funds
 
   def initialize(account = nil)
     @account_status = {:total=>nil}
@@ -140,8 +140,8 @@ class ShinseiPowerDirect
         accounts[accountid[m[1].to_i]][:type] = m[2]
     }
 
-    res.body.scan(/fldAccountDesc\[(\d+)\]="(\w+)"/) { m = Regexp.last_match
-        accounts[accountid[m[1].to_i]][:desc] = m[2]
+    res.body.scan(/fldAccountDesc\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        accounts[accountid[m[1].to_i]][:desc] = m[2].toutf8
     }
 
     res.body.scan(/fldCurrCcy\[(\d+)\]="(\w+)"/) { m = Regexp.last_match
@@ -155,6 +155,25 @@ class ShinseiPowerDirect
     res.body.scan(/fldBaseBalance\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
         accounts[accountid[m[1].to_i]][:base_balance] = m[2].gsub(/,/,'').to_f
     }
+
+    funds = []
+    res.body.scan(/fldUHIDArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i] = { :id => m[2]}
+    }
+    res.body.scan(/fldFundNameArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:name] = m[2].toutf8
+    }
+    res.body.scan(/fldCurrentHoldingArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:holding] = m[2].gsub(/,/,'').to_i
+    }
+    res.body.scan(/fldValInBaseCurrArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:base_curr] = m[2].gsub(/,/,'').to_f
+    }
+    res.body.scan(/fldCurrentNAVArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:current_nav] = m[2].gsub(/,/,'').to_f
+    }
+    @funds = funds
+
 
     total = "0"
     if res.body =~/fldGrandTotalCR="([\d\.,]+)"/
