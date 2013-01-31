@@ -128,6 +128,7 @@ class ShinseiPowerDirect
     #p postdata
     url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     res = @client.post(url, postdata)
+    #puts res.body
 
     accountid=[]
     accounts = {}
@@ -160,7 +161,10 @@ class ShinseiPowerDirect
     res.body.scan(/fldUHIDArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
         funds[m[1].to_i] = { :id => m[2]}
     }
-    res.body.scan(/fldFundNameArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+    res.body.scan(/fldFundID\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:fid] = m[2]
+    }
+    res.body.scan(/fldFundNameArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
         funds[m[1].to_i][:name] = m[2].toutf8
     }
     res.body.scan(/fldCurrentHoldingArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
@@ -398,6 +402,105 @@ class ShinseiPowerDirect
       #fldFlagRegister:
       #'fldDomFTLimit'=>'4000000',
     }.merge(values)
+
+    p postdata
+    res = @client.post(url, postdata)
+    puts res.body
+
+  end
+
+  # 投資信託売る(実装中)
+  def sell_fund fund, amount
+    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'SMF',
+      'fldScrSeqNo'=>'01',
+      'fldRequestorID'=>'15',
+      'fldSessionID'=> @ssid,
+
+      'fldDefFundID'=>fund[:fid],
+      'fldCDCCode'=>'',
+      'fldUHID'=>fund[:id],
+      'fldTkApplicable'=>'0',
+    }
+
+    res = @client.post(url, postdata)
+
+    acc= {}
+    ['fldBankIDArray', 'fldBranchIDArray', 'fldAcctIDArray', 'fldAcctTypeArray', 'fldAcctCurrArray',
+      'fldDebitAmountUnformatted', 'fldReimbursedAmt', 'fldRemReimburse'].each{|k|
+      if res.body =~/#{k}\[0\]\[0\]=['"]([^'"]*)['"]/
+        acc[k] = $1
+      end
+    }
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'SMF',
+      'fldScrSeqNo'=>'02',
+      'fldRequestorID'=>'16',
+      'fldSessionID'=> @ssid,
+
+      'fldMFID'=>fund[:fid],
+      'fldRdmMode'=>'BANKXFER',
+      'fldAcctID'=> acc['fldAcctIDArray'],
+      'fldAcctType'=>acc['fldAcctTypeArray'],
+      'fldAcctCurr'=>acc['fldAcctCurrArray'],
+      'fldBankID'=>acc['fldBankIDArray'],
+      'fldBranchID'=>acc['fldBranchIDArray'],
+      'fldUHID'=>fund[:id],
+      'fldTxnCurr'=> acc['fldAcctCurrArray'],
+      'fldSellType'=>'UNITS',
+      'fldSellUnits'=>amount,
+      'fldGrossOrNet'=>'GROSS',
+      'fldTkApplicable'=> '0',
+    }
+
+    #p postdata
+    res = @client.post(url, postdata)
+
+    values= {}
+    ['fldEODRunning', 'fldTkApplicable', 'fldAllocationDate', 'fldPaymentDate', 'fldConfirmationDate',  'fldTransactionDate', 'fldFCISDPRefNo'].each{|k|
+      if res.body =~/#{k}=['"]([^'"]*)['"]/
+        values[k] = $1
+      end
+    }
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'SMF',
+      'fldScrSeqNo'=>'03',
+      'fldRequestorID'=>'17',
+      'fldSessionID'=> @ssid,
+
+      'fldDefFundID'=>fund[:fid],
+      'fldDefSellType'=>'UNITS',
+      'fldDefSellUnits'=>amount,
+      'fldDefTxnCurr'=> acc['fldAcctCurrArray'],
+      'fldDefRdmMode'=>'BANKXFER',
+      'fldDefAcctID'=> acc['fldAcctIDArray'],
+      'fldDefAcctType'=>acc['fldAcctTypeArray'],
+      'fldDefBankID'=>acc['fldBankIDArray'],
+      'fldDefBranchID'=>acc['fldBranchIDArray'],
+      'fldDefAcctCurr'=>acc['fldAcctCurrArray'],
+      'fldUHID'=>fund[:id],
+      'fldGrossOrNet'=>'GROSS',
+
+      'fldEODRunning'=> values['fldEODRunning'],
+      'fldUserOverride'=>'Y',
+      'fldFCISDPRefNo'=> values['fldFCISDPRefNo'],
+      'fldTransactionDate'=> values['fldTransactionDate'].gsub('/',''),
+      'fldAllocationDate'=> values['fldAllocationDate'].gsub('/',''),
+      'fldConfirmationDate'=> values['fldConfirmationDate'].gsub('/',''),
+      'fldPaymentDate'=> values['fldPaymentDate'].gsub('/',''),
+      'fldPreCalcFlag'=>'Y',
+      'fldTkApplicable'=> values['fldTkApplicable'],
+    }
 
     p postdata
     res = @client.post(url, postdata)
