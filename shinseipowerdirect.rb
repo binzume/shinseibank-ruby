@@ -1,17 +1,24 @@
 # -*- encoding: utf-8 -*-
 #
 #  新生銀行
-#    http://www.binzume.net/
-require "kconv"
-require "rexml/document"
-require "time"
-require_relative "httpclient"
+#  Shinsei power direct client
+#
+# @author binzume  http://www.binzume.net/
+#
+
+require 'kconv'
+require 'time'
+require_relative 'httpclient'
 
 class ShinseiPowerDirect
-  attr_accessor :account, :account_status, :accounts, :funds
+  attr_reader :account_status, :accounts, :funds, :last_html
+  attr_accessor :account
 
   def initialize(account = nil)
     @account_status = {:total=>nil}
+    @url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
+    ua = "Mozilla/5.0 (Windows; U; Windows NT 5.1;) PowerDirectBot/0.1"
+    @client = HTTPClient.new(:agent_name => ua)
 
     if account
       login(account)
@@ -20,10 +27,10 @@ class ShinseiPowerDirect
 
   ##
   # ログイン
+  #
+  # @param [Hash] account アカウント情報(see shinsei_account.yaml.sample)
   def login(account)
     @account = account
-    ua = "Mozilla/5.0 (Windows; U; Windows NT 5.1;) PowerDirectBot/0.1"
-    @client = HTTPClient.new(:agent_name => ua)
 
     postdata = {
       'MfcISAPICommand'=>'EntryFunc',
@@ -39,8 +46,7 @@ class ShinseiPowerDirect
       'fldRegAuthFlag'=>'A'
     }
 
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     values= {}
     ['fldSessionID', 'fldGridChallange1', 'fldGridChallange2', 'fldGridChallange3', 'fldRegAuthFlag'].each{|k|
@@ -69,8 +75,7 @@ class ShinseiPowerDirect
       'fldRegAuthFlag'=>values['fldRegAuthFlag'],
     }
 
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     get_accounts
   end
@@ -91,19 +96,22 @@ class ShinseiPowerDirect
     }
 
     #p postdata
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
   end
 
   ##
   # 残高確認
+  #
+  # @return [int] 残高(yen)
   def total_balance
     @account_status[:total]
   end
 
   ##
-  # 直近の取引履歴
+  # 直近の取引履歴(円口座)
+  #
+  # @return [Array] 履歴の配列
   def recent
     get_history nil, nil, @accounts.keys[0]
   end
@@ -126,8 +134,7 @@ class ShinseiPowerDirect
     }
 
     #p postdata
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
     #puts res.body
 
     accountid=[]
@@ -164,6 +171,9 @@ class ShinseiPowerDirect
     res.body.scan(/fldFundID\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
         funds[m[1].to_i][:fid] = m[2]
     }
+    res.body.scan(/fldUHCurrArray\[(\d+)\]="([\w]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:curr] = m[2]
+    }
     res.body.scan(/fldFundNameArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
         funds[m[1].to_i][:name] = m[2].toutf8
     }
@@ -177,6 +187,7 @@ class ShinseiPowerDirect
         funds[m[1].to_i][:current_nav] = m[2].gsub(/,/,'').to_f
     }
     @funds = funds
+
 
 
     total = "0"
@@ -200,7 +211,7 @@ class ShinseiPowerDirect
       'fldSessionID'=> @ssid,
 
       'fldAcctID'=> id, # 400????
-      'fldAcctType'=>'CHECKING',
+      'fldAcctType'=>@accounts[id][:type],
       'fldIncludeBal'=>'N',
 
       'fldStartDate'=> from ? from.strftime('%Y%m%d') : '',
@@ -212,8 +223,7 @@ class ShinseiPowerDirect
     }
 
     #p postdata
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     history = []
 
@@ -251,9 +261,10 @@ class ShinseiPowerDirect
   end
 
   ##
-  # move to registered account
-  #   name = target 7digit account num.
-  #   amount < 2000000 ?
+  # transfer to registered account
+  #
+  # @param [string] name = target 7digit account num. TODO:口座番号被る可能性について考える
+  # @param [int] amount < 2000000 ?
   def transfer_to_registered_account name, amount
 
     postdata = {
@@ -266,8 +277,7 @@ class ShinseiPowerDirect
     }
 
     #p postdata
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     registered_account = []
 
@@ -357,7 +367,7 @@ class ShinseiPowerDirect
     }.merge(values)
 
 
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     values= {}
     ['fldMemo', 'fldInvoicePosition', 'fldTransferType', 'fldTransferDate', 'fldTransferFeeUnformatted',
@@ -403,15 +413,63 @@ class ShinseiPowerDirect
       #'fldDomFTLimit'=>'4000000',
     }.merge(values)
 
+    #p postdata
+    res = @client.post(@url, postdata)
+
+    @last_html = res.body
+  end
+
+
+  ##
+  # 投資信託買う(未実装)
+  #
+  # @param [Hash] fund 投資信託情報
+  # @param [int] amount yen
+  def buy_fund fund, amount
+    acc = @accounts.values.find{|a| a[:curr] == fund[:curr]}
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'BMF',
+      'fldScrSeqNo'=>'02',
+      'fldRequestorID'=>'4',
+      'fldSessionID'=> @ssid,
+
+      'fldPayMode'=> 'BANKXFER',
+      'fldMFID'=> fund[:fid],
+      'fldBuyType'=> 'AMOUNT',
+      'fldBuyUnits'=> amount,
+      'fldTxnCurr'=> acc[:curr],
+      'fldAcctID'=> acc[:id],
+      'fldAcctType'=> acc[:type],
+      'fldAcctCurr'=> acc[:curr],
+      'fldBankID'=> '397', # shinsei-bank
+      'fldBranchID'=> acc[:id][0..2],
+      'fldUHID'=> fund[:id],
+      'fldAcctBalance'=> acc[:balance],
+      'fldLOIApplicable'=> '0',
+      'fldCertReqd'=> '0',
+      'fldSingleCert'=> '0',
+      'fldGrossOrNet'=> 'GROSS',
+      'fldUserOverride'=> 'Y',
+      'fldTkEnabled'=> '0',
+      'fldMfTk'=> '1',
+      'fldTkApplicable'=>'0',
+    }
+
     p postdata
-    res = @client.post(url, postdata)
-    puts res.body
+    res = @client.post(@url, postdata)
+    @last_html = res.body
 
   end
 
-  # 投資信託売る(実装中)
+
+  ##
+  # 投資信託売る
+  #
+  # @param [Hash] fund 投資信託情報( funds()で得たもののいずれか )
+  # @param [Int] amount:口数
   def sell_fund fund, amount
-    url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
 
     postdata = {
       'MfcISAPICommand'=>'EntryFunc',
@@ -426,8 +484,7 @@ class ShinseiPowerDirect
       'fldUHID'=>fund[:id],
       'fldTkApplicable'=>'0',
     }
-
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     acc= {}
     ['fldBankIDArray', 'fldBranchIDArray', 'fldAcctIDArray', 'fldAcctTypeArray', 'fldAcctCurrArray',
@@ -461,7 +518,7 @@ class ShinseiPowerDirect
     }
 
     #p postdata
-    res = @client.post(url, postdata)
+    res = @client.post(@url, postdata)
 
     values= {}
     ['fldEODRunning', 'fldTkApplicable', 'fldAllocationDate', 'fldPaymentDate', 'fldConfirmationDate',  'fldTransactionDate', 'fldFCISDPRefNo'].each{|k|
@@ -502,9 +559,9 @@ class ShinseiPowerDirect
       'fldTkApplicable'=> values['fldTkApplicable'],
     }
 
-    p postdata
-    res = @client.post(url, postdata)
-    puts res.body
+    #p postdata
+    res = @client.post(@url, postdata)
+    @last_html = res.body
 
   end
 
