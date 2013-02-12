@@ -421,12 +421,13 @@ class ShinseiPowerDirect
 
 
   ##
-  # 投資信託買う(未実装)
+  # 投資信託買う(実装中…)
   #
   # @param [Hash] fund 投資信託情報
   # @param [int] amount yen
   def buy_fund fund, amount
     acc = @accounts.values.find{|a| a[:curr] == fund[:curr]}
+    url = 'https://directa10.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
     postdata = {
       'MfcISAPICommand'=>'EntryFunc',
       'fldAppID'=>'IS',
@@ -441,24 +442,78 @@ class ShinseiPowerDirect
       'fldBuyUnits'=> amount,
       'fldTxnCurr'=> acc[:curr],
       'fldAcctID'=> acc[:id],
-      'fldAcctType'=> acc[:type],
+      'fldAcctType'=> 'SAVINGS', # acc[:type]?
       'fldAcctCurr'=> acc[:curr],
       'fldBankID'=> '397', # shinsei-bank
       'fldBranchID'=> acc[:id][0..2],
       'fldUHID'=> fund[:id],
-      'fldAcctBalance'=> acc[:balance],
+      'fldAcctBalance'=> acc[:balance].to_i,
       'fldLOIApplicable'=> '0',
       'fldCertReqd'=> '0',
       'fldSingleCert'=> '0',
       'fldGrossOrNet'=> 'GROSS',
-      'fldUserOverride'=> 'Y',
+      'fldUserOverride'=> '',
       'fldTkEnabled'=> '0',
       'fldMfTk'=> '1',
       'fldTkApplicable'=>'0',
     }
 
-    p postdata
     res = @client.post(@url, postdata)
+
+    values = {}
+    ['fldFundID', 'fldBuyType', 'fldBuyUnits', 'fldTxnCurr', 'fldPayMode', 'fldAcctID', 'fldAcctType', 'fldBankID',
+      'fldAcctCurr', 'fldBranchID', 'fldPayCCIssuersType', 'fldPayCCNo', 'fldPayCCExpiryDate','fldUHID', 'fldLOIApplicable',
+      'fldCertReqd','fldGrossOrNet','fldSingleCert','fldAcctBalance', 'fldUserOverride','fldTkEnabled', 'fldMfTk',
+      'fldTkApplicable','fldUHCategory','fldFCISDPRefNo','fldTransactionDate','fldAllocationDate', 'fldConfirmationDate', 'fldPreCalcFlag'].each{|k|
+      if res.body =~/#{k}=['"]([^'"]*)['"]/
+        values[k] = $1
+      end
+    }
+
+    values['fldUserOverride'] = 'Y'
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'BMF',
+      'fldScrSeqNo'=>'03',
+      'fldRequestorID'=>'6',
+      'fldSessionID'=> @ssid,
+
+      'fldDefFundID' => values['fldFundID'],
+      'fldDefBuyType' => values['fldBuyType'],
+      'fldDefBuyUnits' => values['fldBuyUnits'],
+      'fldDefTxnCurr' => values['fldTxnCurr'],
+      'fldDefPayMode' => values['fldPayMode'],
+      'fldDefPayAcctID' => values['fldAcctID'],
+      'fldDefPayAcctType' => values['fldAcctType'],
+      'fldDefPayBankID' => values['fldBankID'],
+      'fldDefAcctCurr' => values['fldAcctCurr'],
+      'fldDefPayBranchID' => values['fldBranchID'],
+      'fldDefPayCCIssuersType' => values['fldPayCCIssuersType'],
+      'fldDefPayCCNo' => values['fldPayCCNo'],
+      'fldDefPayCCExpiryDate' => values['fldPayCCExpiryDate'],
+      'fldUHID' => values['fldUHID'],
+      'fldLOIApplicable' => values['fldLOIApplicable'],
+      'fldCertReqd' => values['fldCertReqd'],
+      'fldGrossOrNet' => values['fldGrossOrNet'],
+      'fldSingleCert' => values['fldSingleCert'],
+      'fldAcctBalance' => values['fldAcctBalance'],
+      'fldUserOverride' => values['fldUserOverride'],
+      'fldTkEnabled' => values['fldTkEnabled'],
+      'fldMfTk' => values['fldMfTk'],
+      'fldTkApplicable' => values['fldTkApplicable'],
+      'fldUHCategory' => values['fldUHCategory'],
+      'fldFCISDPRefNo' => values['fldFCISDPRefNo'],
+      'fldTransactionDate' => values['fldTransactionDate'].gsub('/',''),
+      'fldAllocationDate' => values['fldAllocationDate'].gsub('/',''),
+      'fldConfirmationDate' => values['fldConfirmationDate'].gsub('/',''),
+      'fldPreCalcFlag' => values['fldPreCalcFlag'],
+    }
+
+    # デバッグ用．確定しない
+    p postdata
+    #res = @client.post(@url, postdata)
     @last_html = res.body
 
   end
@@ -563,6 +618,67 @@ class ShinseiPowerDirect
     res = @client.post(@url, postdata)
     @last_html = res.body
 
+  end
+
+  def fund_history fund, from = nil, to = nil
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'TXN',
+      'fldScrSeqNo'=>'02',
+      'fldRequestorID'=>'30',
+      'fldSessionID'=> @ssid,
+
+      'fldINCTRAN'=>'N',
+      'fldINCOO'=>'N',
+      'fldINCPOS'=>'N',
+      'fldINCBAL'=>'N',
+      'fldFundID'=> fund[:fid],
+      'fldUHID'=> fund[:id],
+      'fldCriteria'=>'NOOFTRAN',
+      'fldStartDate'=> from ? from.strftime('%Y%m%d') : '',
+      'fldEndDate'=> to ? to.strftime('%Y%m%d') : '',
+      'fldNoOfTran'=>'',
+      'fldNoOfTranPerScreen'=>'10',
+      'fldStartNum'=>'0',
+      'fldEndNum'=>'0',
+      'fldCurDef'=>'JPY',
+      'fldPrevNext'=>'H',
+      'fldIncludeBal'=>'Y',
+      'fldPolicyNumber'=>'UT'
+    }
+
+    #p postdata
+    res = @client.post(@url, postdata)
+
+    history = []
+
+    res.body.scan(/fldTxnDateArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i] = {:date=>m[2]}
+    }
+
+    res.body.scan(/fldDateAlloted\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i] = {:alloc_date=>m[2]}
+    }
+
+    res.body.scan(/fldRefNoArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:ref_no] = m[2]
+    }
+
+    res.body.scan(/fldTxnTypeArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:type] = m[2].toutf8
+    }
+
+    res.body.scan(/fldAmountArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:units] = m[2].gsub(/[,\.]/,'').to_i
+    }
+
+    res.body.scan(/fldStlmntAmtFormatted\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        history[m[1].to_i][:amount] = m[2].gsub(/,/,'').to_i
+    }
+
+    history
   end
 
   private
