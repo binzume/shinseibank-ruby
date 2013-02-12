@@ -165,11 +165,11 @@ class ShinseiPowerDirect
     }
 
     funds = []
-    res.body.scan(/fldUHIDArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+    res.body.scan(/fldFundID\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
         funds[m[1].to_i] = { :id => m[2]}
     }
-    res.body.scan(/fldFundID\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
-        funds[m[1].to_i][:fid] = m[2]
+    res.body.scan(/fldUHIDArray\[(\d+)\]="([\w\.,]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:uhid] = m[2]
     }
     res.body.scan(/fldUHCurrArray\[(\d+)\]="([\w]+)"/) { m = Regexp.last_match
         funds[m[1].to_i][:curr] = m[2]
@@ -427,7 +427,7 @@ class ShinseiPowerDirect
   # @param [int] amount yen
   def buy_fund fund, amount
     acc = @accounts.values.find{|a| a[:curr] == fund[:curr]}
-    url = 'https://directa10.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
+
     postdata = {
       'MfcISAPICommand'=>'EntryFunc',
       'fldAppID'=>'IS',
@@ -437,7 +437,7 @@ class ShinseiPowerDirect
       'fldSessionID'=> @ssid,
 
       'fldPayMode'=> 'BANKXFER',
-      'fldMFID'=> fund[:fid],
+      'fldMFID'=> fund[:id],
       'fldBuyType'=> 'AMOUNT',
       'fldBuyUnits'=> amount,
       'fldTxnCurr'=> acc[:curr],
@@ -446,7 +446,7 @@ class ShinseiPowerDirect
       'fldAcctCurr'=> acc[:curr],
       'fldBankID'=> '397', # shinsei-bank
       'fldBranchID'=> acc[:id][0..2],
-      'fldUHID'=> fund[:id],
+      'fldUHID'=> fund[:uhid],
       'fldAcctBalance'=> acc[:balance].to_i,
       'fldLOIApplicable'=> '0',
       'fldCertReqd'=> '0',
@@ -534,9 +534,9 @@ class ShinseiPowerDirect
       'fldRequestorID'=>'15',
       'fldSessionID'=> @ssid,
 
-      'fldDefFundID'=>fund[:fid],
+      'fldDefFundID'=>fund[:id],
       'fldCDCCode'=>'',
-      'fldUHID'=>fund[:id],
+      'fldUHID'=>fund[:uhid],
       'fldTkApplicable'=>'0',
     }
     res = @client.post(@url, postdata)
@@ -557,14 +557,14 @@ class ShinseiPowerDirect
       'fldRequestorID'=>'16',
       'fldSessionID'=> @ssid,
 
-      'fldMFID'=>fund[:fid],
+      'fldMFID'=>fund[:id],
       'fldRdmMode'=>'BANKXFER',
       'fldAcctID'=> acc['fldAcctIDArray'],
       'fldAcctType'=>acc['fldAcctTypeArray'],
       'fldAcctCurr'=>acc['fldAcctCurrArray'],
       'fldBankID'=>acc['fldBankIDArray'],
       'fldBranchID'=>acc['fldBranchIDArray'],
-      'fldUHID'=>fund[:id],
+      'fldUHID'=>fund[:uhid],
       'fldTxnCurr'=> acc['fldAcctCurrArray'],
       'fldSellType'=>'UNITS',
       'fldSellUnits'=>amount,
@@ -590,7 +590,7 @@ class ShinseiPowerDirect
       'fldRequestorID'=>'17',
       'fldSessionID'=> @ssid,
 
-      'fldDefFundID'=>fund[:fid],
+      'fldDefFundID'=>fund[:id],
       'fldDefSellType'=>'UNITS',
       'fldDefSellUnits'=>amount,
       'fldDefTxnCurr'=> acc['fldAcctCurrArray'],
@@ -600,7 +600,7 @@ class ShinseiPowerDirect
       'fldDefBankID'=>acc['fldBankIDArray'],
       'fldDefBranchID'=>acc['fldBranchIDArray'],
       'fldDefAcctCurr'=>acc['fldAcctCurrArray'],
-      'fldUHID'=>fund[:id],
+      'fldUHID'=>fund[:uhid],
       'fldGrossOrNet'=>'GROSS',
 
       'fldEODRunning'=> values['fldEODRunning'],
@@ -634,8 +634,8 @@ class ShinseiPowerDirect
       'fldINCOO'=>'N',
       'fldINCPOS'=>'N',
       'fldINCBAL'=>'N',
-      'fldFundID'=> fund[:fid],
-      'fldUHID'=> fund[:id],
+      'fldFundID'=> fund[:id],
+      'fldUHID'=> fund[:uhid],
       'fldCriteria'=>'NOOFTRAN',
       'fldStartDate'=> from ? from.strftime('%Y%m%d') : '',
       'fldEndDate'=> to ? to.strftime('%Y%m%d') : '',
@@ -679,6 +679,63 @@ class ShinseiPowerDirect
     }
 
     history
+  end
+
+  def all_funds
+
+    postdata = {
+      'MfcISAPICommand'=>'EntryFunc',
+      'fldAppID'=>'IS',
+      'fldTxnID'=>'BMF',
+      'fldScrSeqNo'=>'00',
+      'fldRequestorID'=>'1',
+      'fldSessionID'=> @ssid,
+
+      'fldflgUHID'=>'N',
+      'fldALPHALIST'=>'Y',
+      'fldInvObjective'=>'2',
+      'fldInvNature'=>'2',
+      'fldInvExp'=>'2',
+      'fldFinSituation'=>'2',
+    }
+
+    #p postdata
+    res = @client.post(@url, postdata)
+
+    uhids = []
+    res.body.scan(/fldTopUHIDArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        uhids[m[1].to_i] = m[2]
+    }
+
+
+    funds = []
+
+    res.body.scan(/fldFundIDArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i] = {:id=>m[2], :uhid=>uhids[0]}
+    }
+
+    res.body.scan(/fldFundNameArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:name] = m[2].toutf8
+    }
+
+    res.body.scan(/fldFundRiskLevel\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:risk_level] = m[2].to_i
+    }
+
+    res.body.scan(/fldFundCategoryName\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:category_name] = m[2].toutf8
+    }
+
+    res.body.scan(/fldFundCategory\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:category] = m[2]
+    }
+
+
+    res.body.scan(/fldFundURLArray\[(\d+)\]="([^"]+)"/) { m = Regexp.last_match
+        funds[m[1].to_i][:url] = m[2].toutf8
+    }
+
+    funds
   end
 
   private
