@@ -54,3 +54,23 @@ puts "ok"
 
 
 
+登録済み口座に振り込む
+
+ powerdirect.transfer_to_registered_account('registed_account_num', 50000)
+ # TODO:将来的にconfirmメソッドで確定するようにする
+
+投資信託を買う(すでに買ってあるやつを追加で)
+
+  fund = powerdirect.funds[0]
+  req = powerdirect.buy_fund fund, 1000000
+  powerdirect.confitm req
+
+投資信託を解約
+
+  fund = powerdirect.funds[0]
+  req = powerdirect.sell_fund fund, 1230000
+  powerdirect.confitm req
+
+
+あらゆる動作は無保証です．実装と動作をよく確認して使ってください．
+

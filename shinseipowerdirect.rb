@@ -512,12 +512,12 @@ class ShinseiPowerDirect
     }
 
     # デバッグ用．確定しない
-    p postdata
+    #p postdata
     #res = @client.post(@url, postdata)
     @last_html = res.body
 
+    {:method => 'buy_fund' ,:postdata => postdata }
   end
-
 
   ##
   # 投資信託売る
@@ -614,10 +614,21 @@ class ShinseiPowerDirect
       'fldTkApplicable'=> values['fldTkApplicable'],
     }
 
+    # デバッグ用．確定しない
     #p postdata
-    res = @client.post(@url, postdata)
+    #res = @client.post(@url, postdata)
     @last_html = res.body
 
+    {:method => 'sell_fund' ,:postdata => postdata }
+  end
+
+  ##
+  # 確定する
+  #
+  # @param [Hash] data sell_fundやbuy_fundの結果
+  def confirm data
+    res = @client.post(@url, data[:postdata])
+    @last_html = res.body
   end
 
   def fund_history fund, from = nil, to = nil
