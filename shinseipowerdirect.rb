@@ -464,7 +464,8 @@ class ShinseiPowerDirect
     ['fldFundID', 'fldBuyType', 'fldBuyUnits', 'fldTxnCurr', 'fldPayMode', 'fldAcctID', 'fldAcctType', 'fldBankID',
       'fldAcctCurr', 'fldBranchID', 'fldPayCCIssuersType', 'fldPayCCNo', 'fldPayCCExpiryDate','fldUHID', 'fldLOIApplicable',
       'fldCertReqd','fldGrossOrNet','fldSingleCert','fldAcctBalance', 'fldUserOverride','fldTkEnabled', 'fldMfTk',
-      'fldTkApplicable','fldUHCategory','fldFCISDPRefNo','fldTransactionDate','fldAllocationDate', 'fldConfirmationDate', 'fldPreCalcFlag'].each{|k|
+      'fldTkApplicable','fldUHCategory','fldFCISDPRefNo','fldTransactionDate','fldAllocationDate', 'fldConfirmationDate', 'fldPreCalcFlag',
+      'fldFeeAmount', 'fldTaxAmount', 'fldUnits'].each{|k|
       if res.body =~/#{k}=['"]([^'"]*)['"]/
         values[k] = $1
       end
@@ -516,7 +517,11 @@ class ShinseiPowerDirect
     #res = @client.post(@url, postdata)
     @last_html = res.body
 
-    {:method => 'buy_fund' ,:postdata => postdata }
+    unless values['fldUnits']
+      return nil
+    end
+
+    {:method => 'buy_fund', :units => values['fldUnits'].gsub(',','').to_i , :alloc_date => values['fldAllocationDate'] ,:postdata => postdata }
   end
 
   ##
@@ -576,7 +581,8 @@ class ShinseiPowerDirect
     res = @client.post(@url, postdata)
 
     values= {}
-    ['fldEODRunning', 'fldTkApplicable', 'fldAllocationDate', 'fldPaymentDate', 'fldConfirmationDate',  'fldTransactionDate', 'fldFCISDPRefNo'].each{|k|
+    ['fldEODRunning', 'fldTkApplicable', 'fldAllocationDate', 'fldPaymentDate', 'fldConfirmationDate',
+     'fldTransactionDate', 'fldFCISDPRefNo', 'fldSettlementAmt'].each{|k|
       if res.body =~/#{k}=['"]([^'"]*)['"]/
         values[k] = $1
       end
@@ -619,7 +625,7 @@ class ShinseiPowerDirect
     #res = @client.post(@url, postdata)
     @last_html = res.body
 
-    {:method => 'sell_fund' ,:postdata => postdata }
+    {:method => 'sell_fund' , :amount=>values['fldSettlementAmt'].gsub(',','').to_f,  :alloc_date => values['fldAllocationDate'], :postdata => postdata }
   end
 
   ##
