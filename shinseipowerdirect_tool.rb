@@ -65,7 +65,7 @@ begin
       p req
       if ARGV[4] == 'confirm'
         puts 'submit!'
-        powerdirect.confitm req
+        powerdirect.confirm req
         fname = Time.now.strftime('%Y%m%d_%H%M%S') + "_buy_fund.html"
         open(fname,'w'){|f| f.write(powerdirect.last_html) }
       end
@@ -79,7 +79,7 @@ begin
       p req
       if ARGV[4] == 'confirm'
         puts 'submit!'
-        powerdirect.confitm req
+        powerdirect.confirm req
         fname = Time.now.strftime('%Y%m%d_%H%M%S') + "_sell_fund.html"
         open(fname,'w'){|f| f.write(powerdirect.last_html) }
       end
