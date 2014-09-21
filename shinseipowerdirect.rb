@@ -16,7 +16,7 @@ class ShinseiPowerDirect
 
   def initialize(account = nil)
     @account_status = {:total=>nil}
-    @url = 'https://direct18.shinseibank.co.jp/FLEXCUBEAt/LiveConnect.dll'
+    @url = 'https://pdirect04.shinseibank.com/FLEXCUBEAt/LiveConnect.dll'
     ua = "Mozilla/5.0 (Windows; U; Windows NT 5.1;) PowerDirectBot/0.1"
     @client = HTTPClient.new(:agent_name => ua)
 
