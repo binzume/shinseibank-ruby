@@ -20,9 +20,11 @@ begin
     p row
   end
 
+  puts "accounts:"
   powerdirect.accounts.values.find_all{|a|a[:balance]>0}.each{|a|
     p a
   }
+  puts "funds:"
   powerdirect.funds.each{|f|
     p f
   }
